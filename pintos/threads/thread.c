@@ -208,6 +208,7 @@ thread_print_stats (void) {
 3. 스레드 실행을 위한 준비물인 CPU 레지스터 값을 설정
 4. 스레드 생성 -> 스레드 준비 
 5. 스레드를 준비 큐에 삽입
+5-1. 준비 큐에 넣자마자 실행이 될 수도 있고 나중에 실행될 수도 있다.
 */
 tid_t thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
@@ -225,6 +226,7 @@ tid_t thread_create (const char *name, int priority,
 		return TID_ERROR;
 
 	/* Initialize thread. */
+	/* 상태는 block로 설정 */
 	init_thread (t, name, priority);
 	/* 유일한 스레드 식별자 생성 후 할당 */
 	tid = t->tid = allocate_tid ();
@@ -244,7 +246,6 @@ tid_t thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	/* 스레드를 준비 리스트에 넣고 실행 가능한 상태로 만든다. */
-
 	thread_unblock (t);
 
 	return tid;
@@ -256,6 +257,8 @@ tid_t thread_create (const char *name, int priority,
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
+/* ASSERT (intr_get_level () == INTR_OFF) : 현재는 준비상태니까 인터럽트 꺼져 있어야 한다.
+*/
 void
 thread_block (void) {
 	ASSERT (!intr_context ());
@@ -272,16 +275,22 @@ thread_block (void) {
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-void
+/* */
+
+
+void 
 thread_unblock (struct thread *t) {
 	enum intr_level old_level;
-
+	//유효한 스레드인가?
 	ASSERT (is_thread (t));
 
+	//준비큐는 다양한 흐름에서 조작될 수 있기 때문에 잠시 인터럽트를 무시해야 함
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
+	//준비 큐에 넣고 상태를 준비로 바꿈        
 	list_push_back (&ready_list, &t->elem);
-	t->status = THREAD_READY;
+ 	t->status = THREAD_READY;
+	//인터럽트 복구
 	intr_set_level (old_level);
 }
 
